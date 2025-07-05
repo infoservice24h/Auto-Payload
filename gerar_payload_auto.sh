@@ -142,15 +142,16 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-SMALI_PATH=$(echo $PACKAGE | sed 's/\./\//g')
-BOOTRECEIVER_PATH="$WORKDIR/smali/$SMALI_PATH"
+# Converte nome do pacote para formato smali (com barras)
+PACKAGE_SMALI=$(echo $PACKAGE | sed 's/\./\//g')
+BOOTRECEIVER_PATH="$WORKDIR/smali/$PACKAGE_SMALI"
 
 echo "[*] Criando diretório para BootReceiver: $BOOTRECEIVER_PATH"
 mkdir -p $BOOTRECEIVER_PATH
 
 echo "[*] Criando BootReceiver.smali..."
 cat > $BOOTRECEIVER_PATH/BootReceiver.smali <<EOF
-.class public L$PACKAGE/BootReceiver;
+.class public L${PACKAGE_SMALI}/BootReceiver;
 .super Landroid/content/BroadcastReceiver;
 
 .method public constructor <init>()V
