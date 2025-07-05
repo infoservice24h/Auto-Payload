@@ -70,6 +70,19 @@ create_proguard_config() {
 EOF
 }
 
+install_apktool() {
+    if ! command -v apktool &> /dev/null; then
+        echo "[*] apktool não encontrado. Instalando..."
+        sudo apt update && sudo apt install -y apktool
+        if [ $? -ne 0 ]; then
+            echo "Erro ao instalar apktool. Abortando."
+            exit 1
+        fi
+    else
+        echo "[*] apktool encontrado."
+    fi
+}
+
 install_tools() {
     echo "[*] Verificando ferramentas necessárias para ofuscação..."
 
@@ -118,6 +131,9 @@ if [ $? -ne 0 ]; then
     echo "Erro ao gerar payload com msfvenom."
     exit 1
 fi
+
+echo "[*] Verificando apktool..."
+install_apktool
 
 echo "[*] Descompilando APK com apktool..."
 apktool d $PAYLOAD_NAME -o $WORKDIR -f
