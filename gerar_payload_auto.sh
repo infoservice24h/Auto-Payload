@@ -98,14 +98,13 @@ install_proguard() {
 }
 
 install_dex2jar() {
-    if ! command -v d2j-dex2jar &> /dev/null || ! command -v d2j-jar2dex &> /dev/null; then
+    if ! command -v d2j-dex2jar.sh &> /dev/null || ! command -v d2j-jar2dex.sh &> /dev/null; then
         echo "[*] dex2jar não encontrado. Instalando manualmente..."
 
         DEX2JAR_DIR="$HOME/dex2jar"
         if [ ! -d "$DEX2JAR_DIR" ]; then
             mkdir -p "$DEX2JAR_DIR"
             echo "[*] Baixando dex2jar..."
-            # Link atualizado para dex2jar 2.0
             wget -q -O /tmp/dex2jar.zip https://github.com/pxb1988/dex2jar/releases/download/2.0/dex2jar-2.0.zip
             if [ $? -ne 0 ]; then
                 echo "Erro ao baixar dex2jar. Abortando ofuscação."
@@ -228,11 +227,22 @@ else
 
     mkdir -p temp_dex
     unzip -o $OUTPUT_APK classes.dex -d temp_dex
-    d2j-dex2jar temp_dex/classes.dex -o temp_dex/classes.jar
+
+    d2j-dex2jar.sh temp_dex/classes.dex -o temp_dex/classes.jar
+    if [ $? -ne 0 ]; then
+        echo "Erro ao converter dex para jar com dex2jar."
+        rm -rf temp_dex
+        exit 1
+    fi
 
     proguard @${PROGUARD_CONFIG} -injars temp_dex/classes.jar -outjars temp_dex/classes_obf.jar
 
-    d2j-jar2dex -o temp_dex/classes_obf.dex temp_dex/classes_obf.jar
+    d2j-jar2dex.sh -o temp_dex/classes_obf.dex temp_dex/classes_obf.jar
+    if [ $? -ne 0 ]; then
+        echo "Erro ao converter jar para dex com dex2jar."
+        rm -rf temp_dex
+        exit 1
+    fi
 
     zip -j $OUTPUT_APK temp_dex/classes_obf.dex
 
