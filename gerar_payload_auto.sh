@@ -13,19 +13,77 @@ echo "=== Gerador Automático de Payload Android com Persistência e Ofuscação
 install_dex2jar_global() {
     if ! command -v d2j-dex2jar.sh &> /dev/null; then
         echo "[*] dex2jar não encontrado. Instalando globalmente em /usr/local/dex2jar..."
+
+        # Verifica se wget está instalado
+        if ! command -v wget &> /dev/null; then
+            echo "Erro: wget não está instalado. Instalando wget..."
+            apt update && apt install -y wget
+            if [ $? -ne 0 ]; then
+                echo "Erro ao instalar wget. Abortando."
+                exit 1
+            fi
+        fi
+
+        # Verifica se unzip está instalado
+        if ! command -v unzip &> /dev/null; then
+            echo "Erro: unzip não está instalado. Instalando unzip..."
+            apt update && apt install -y unzip
+            if [ $? -ne 0 ]; then
+                echo "Erro ao instalar unzip. Abortando."
+                exit 1
+            fi
+        fi
+
         mkdir -p /usr/local/dex2jar
-        wget -q -O /tmp/dex2jar.zip https://github.com/pxb1988/dex2jar/releases/download/2.0/dex2jar-2.0.zip
+
+        # Obtém a URL da última release do dex2jar no GitHub (redirecionamento)
+        LATEST_RELEASE_URL=$(wget --server-response --max-redirect=0 --quiet https://github.com/pxb1988/dex2jar/releases/latest 2>&1 | grep "Location:" | awk '{print $2}' | tr -d '\r\n')
+
+        if [ -z "$LATEST_RELEASE_URL" ]; then
+            echo "Erro ao obter a URL da última release do dex2jar. Abortando."
+            exit 1
+        fi
+
+        # Extrai a tag da versão da URL (ex: v2.4)
+        VERSION_TAG=$(basename "$LATEST_RELEASE_URL")
+        if [[ ! "$VERSION_TAG" =~ ^v[0-9]+\.[0-9]+ ]]; then
+            echo "Tag de versão inválida obtida: $VERSION_TAG. Abortando."
+            exit 1
+        fi
+
+        # Remove o 'v' para formar o nome do arquivo
+        VERSION_NUMBER="${VERSION_TAG#v}"
+
+        # Monta a URL de download do zip
+        DEX2JAR_ZIP_URL="https://github.com/pxb1988/dex2jar/releases/download/${VERSION_TAG}/dex2jar-${VERSION_NUMBER}.zip"
+
+        echo "[*] Baixando dex2jar versão $VERSION_NUMBER de $DEX2JAR_ZIP_URL ..."
+        wget -q -O /tmp/dex2jar.zip "$DEX2JAR_ZIP_URL"
         if [ $? -ne 0 ]; then
             echo "Erro ao baixar dex2jar. Abortando."
             exit 1
         fi
+
         unzip -q /tmp/dex2jar.zip -d /usr/local/dex2jar
         rm /tmp/dex2jar.zip
-        echo "[*] dex2jar instalado em /usr/local/dex2jar/dex2jar-2.0"
+        echo "[*] dex2jar instalado em /usr/local/dex2jar/dex2jar-${VERSION_NUMBER}"
+
     else
         echo "[*] dex2jar já instalado."
+        # Detecta versão instalada para PATH
+        if [[ -d /usr/local/dex2jar ]]; then
+            VERSION_DIR=$(ls /usr/local/dex2jar | grep dex2jar- | head -n1)
+            if [ -n "$VERSION_DIR" ]; then
+                VERSION_NUMBER="${VERSION_DIR#dex2jar-}"
+            else
+                VERSION_NUMBER="2.4" # fallback
+            fi
+        else
+            VERSION_NUMBER="2.4" # fallback
+        fi
     fi
-    export PATH="/usr/local/dex2jar/dex2jar-2.0:$PATH"
+
+    export PATH="/usr/local/dex2jar/dex2jar-${VERSION_NUMBER}:$PATH"
     echo "[*] PATH atualizado para incluir dex2jar."
 }
 
@@ -224,8 +282,8 @@ echo "[*] Iniciando ofuscação com ProGuard..."
 mkdir -p temp_dex
 unzip -o $OUTPUT_APK classes.dex -d temp_dex
 
-DEX2JAR_BIN="/usr/local/dex2jar/dex2jar-2.0/d2j-dex2jar.sh"
-JAR2DEX_BIN="/usr/local/dex2jar/dex2jar-2.0/d2j-jar2dex.sh"
+DEX2JAR_BIN="/usr/local/dex2jar/dex2jar-${VERSION_NUMBER}/d2j-dex2jar.sh"
+JAR2DEX_BIN="/usr/local/dex2jar/dex2jar-${VERSION_NUMBER}/d2j-jar2dex.sh"
 
 if [ ! -x "$DEX2JAR_BIN" ] || [ ! -x "$JAR2DEX_BIN" ]; then
     echo "Erro: dex2jar scripts não encontrados ou não executáveis."
