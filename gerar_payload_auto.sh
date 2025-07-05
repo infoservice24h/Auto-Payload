@@ -58,7 +58,7 @@ install_dex2jar_global() {
         DEX2JAR_ZIP_URL="https://github.com/pxb1988/dex2jar/releases/download/${VERSION_TAG}/dex2jar-${VERSION_NUMBER}.zip"
 
         echo "[*] Baixando dex2jar versão $VERSION_NUMBER de $DEX2JAR_ZIP_URL ..."
-        wget -q -O /tmp/dex2jar.zip "$DEX2JAR_ZIP_URL"
+        wget --user-agent="Mozilla/5.0 (X11; Linux x86_64)" -q -O /tmp/dex2jar.zip "$DEX2JAR_ZIP_URL"
         if [ $? -ne 0 ]; then
             echo "Erro ao baixar dex2jar. Abortando."
             exit 1
