@@ -83,22 +83,21 @@ install_apktool() {
     fi
 }
 
-install_tools() {
-    echo "[*] Verificando ferramentas necessárias para ofuscação..."
-
-    # Verifica ProGuard
+install_proguard() {
     if ! command -v proguard &> /dev/null; then
         echo "[*] ProGuard não encontrado. Instalando via apt..."
         sudo apt update && sudo apt install -y proguard
         if [ $? -ne 0 ]; then
-            echo "Erro ao instalar ProGuard. Abortando ofuscação."
+            echo "Erro ao instalar ProGuard."
             return 1
         fi
     else
         echo "[*] ProGuard encontrado."
     fi
+    return 0
+}
 
-    # Verifica dex2jar (d2j-dex2jar e d2j-jar2dex)
+install_dex2jar() {
     if ! command -v d2j-dex2jar &> /dev/null || ! command -v d2j-jar2dex &> /dev/null; then
         echo "[*] dex2jar não encontrado. Instalando manualmente..."
 
@@ -106,6 +105,7 @@ install_tools() {
         if [ ! -d "$DEX2JAR_DIR" ]; then
             mkdir -p "$DEX2JAR_DIR"
             echo "[*] Baixando dex2jar..."
+            # Link atualizado para dex2jar 2.0
             wget -q -O /tmp/dex2jar.zip https://github.com/pxb1988/dex2jar/releases/download/2.0/dex2jar-2.0.zip
             if [ $? -ne 0 ]; then
                 echo "Erro ao baixar dex2jar. Abortando ofuscação."
@@ -121,7 +121,22 @@ install_tools() {
     else
         echo "[*] dex2jar encontrado."
     fi
+    return 0
+}
 
+check_apksigner() {
+    if ! command -v apksigner &> /dev/null; then
+        echo "[*] apksigner não encontrado."
+        echo "[*] Tentando instalar apksigner via apt (pacote apksigner)..."
+        sudo apt update && sudo apt install -y apksigner
+        if [ $? -ne 0 ]; then
+            echo "[!] Não foi possível instalar apksigner automaticamente."
+            echo "[!] Por favor, instale o Android SDK Build Tools e certifique-se que 'apksigner' está no PATH."
+            return 1
+        fi
+    else
+        echo "[*] apksigner encontrado."
+    fi
     return 0
 }
 
@@ -203,7 +218,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-install_tools
+echo "[*] Verificando ferramentas para ofuscação..."
+install_proguard
+install_dex2jar
 if [ $? -ne 0 ]; then
     echo "[!] Falha na instalação das ferramentas. Pulando ofuscação."
 else
@@ -224,6 +241,12 @@ fi
 
 echo "[*] Assinando APK..."
 generate_keystore
+check_apksigner
+if [ $? -ne 0 ]; then
+    echo "[!] Assinatura falhou: apksigner não disponível."
+    exit 1
+fi
+
 apksigner sign --ks $KEYSTORE --ks-key-alias $ALIAS --ks-pass pass:changeit --key-pass pass:changeit $OUTPUT_APK
 if [ $? -ne 0 ]; then
     echo "Erro ao assinar APK."
